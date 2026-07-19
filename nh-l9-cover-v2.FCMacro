@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-# nh-l9-cover.FCMacro   (v2: chamfered grip, 2.5 mm standoffs, corner cable hooks)
+# nh-l9-cover.FCMacro   (v2: chamfered grip, corner cable hooks)
 #
 # Parametric Part Design fan shroud that screws onto the Noctua NH-L9 fan.
 # Body "Shroud":
-#   Sketch_Posts      -> Pad     "Posts"        (4 corner standoffs, 2.5 mm)
+#   Sketch_Posts      -> Pad     "Posts"        (4 corner standoffs, STANDOFF mm)
 #   Sketch_Plate      -> Pad     "GridPlate"
 #   (Chamfer)         -> Chamfer "GripChamfer"  (top+bottom perimeter, feels nice)
 #   Sketch_Hooks      -> Pad     "Hooks"        (4 flat C-rings at the corners)
@@ -27,27 +27,36 @@ import Part
 import Sketcher
 
 # ============================ PARAMETERS =====================================
-FAN_SIZE    = 95.2
+FAN_SIZE    = 92.0     # corrected: real fan measures 92x92 (was 95.2, wrong)
 FAN_CORNER  = 5.0
-SCREW_DX    = 42.79    # screw half-spacing X  (VERIFY vs real fan! std 92mm = 41.25)
-SCREW_DY    = 44.0     # screw half-spacing Y
+SCREW_DX    = 41.25    # corrected: standard 92mm fan hole spacing = 82.5x82.5
+SCREW_DY    = 41.25    # (was 42.79/44.0, i.e. 85.6x88.0 -- too wide). If your
+                        # calipers say something other than 82.5mm apart,
+                        # set SCREW_DX=SCREW_DY=(measured_spacing/2) instead.
 SCREW_D     = 4.5
 POST_D      = 9.0
-STANDOFF    = 2.5      # standoff height (was 5.0)
+STANDOFF    = 0.5      # standoff height
 GRID_T      = 2.5
-CHAMFER     = 0.6      # grip-edge chamfer
+CHAMFER     = 0.1      # grip-edge chamfer. 0.6 repeatedly failed to build on
+                        # this geometry (with or without extra Tangent constraints
+                        # on Sketch_Plate -- tried both, no reliable fix found).
+                        # 0.1 is the confirmed-working value; too thin to really
+                        # feel, but harmless to leave in. If a future revision
+                        # increases GRID_T (plate thickness) rather than FAN_SIZE,
+                        # a larger CHAMFER is more likely to succeed -- the limit
+                        # seems tied to plate thickness vs. FAN_CORNER, not footprint.
 
 HOLE_D      = 8.0      # airflow holes (<= 10)
 PITCH       = 10.5
-GRID_AREA_R = 41.0
+GRID_AREA_R = 38.5
 
 # --- corner cable hooks (flat, coplanar with the plate top) ---
 HOOK_IN     = 4.0      # inner radius (O8 cavity -> holds 3-5 mm cables)
-HOOK_OUT    = 6.0      # outer radius
+HOOK_OUT    = 5.2      # outer radius
 HOOK_MOUTH  = 4.0      # mouth opening width
-HOOK_GAP    = 6.0      # how far the hook centre sits beyond the plate corner
-NECK_W      = 6.0
-NECK_LEN    = 8.0
+HOOK_GAP    = 3.0      # how far the hook centre sits beyond the plate corner
+NECK_W      = 5.0
+NECK_LEN    = 4.5
 # =============================================================================
 
 assert HOLE_D <= 10.0
@@ -145,8 +154,9 @@ try:
         ch.Base=(plate_pad,names); ch.Size=CHAMFER
         body.addObject(ch); doc.recompute()
 except Exception as e:
-    App.Console.PrintWarning("Grip chamfer skipped (%s) - chamfer the top/bottom "
-                             "perimeter by hand in the GUI.\n"%str(e)[:60])
+    App.Console.PrintWarning("Grip chamfer skipped (%s) - try lowering CHAMFER "
+                             "(e.g. 0.3, then 0.1) and re-running, or chamfer the "
+                             "top/bottom perimeter by hand in the GUI.\n"%str(e)[:60])
 
 # ---- hooks: washers + necks, then open the mouth ----
 hooks=new_sketch("Sketch_Hooks",zoff=STANDOFF)
@@ -175,12 +185,13 @@ doc.recompute(); pocket(gh,GRID_T+0.2,"GridHoles")
 
 # ---- screw holes ----
 sc=new_sketch("Sketch_ScrewHoles",zoff=0.0); add_circles(sc,SCREWS,SCREW_D)
-doc.recompute(); pocket(sc,STANDOFF+GRID_T+0.2,"ScrewHoles")
+doc.recompute(); screw_pocket = pocket(sc,STANDOFF+GRID_T+0.2,"ScrewHoles")
 
+body.Tip = screw_pocket   # show the finished solid by default, not the feature history
 doc.recompute()
 try:
     import FreeCADGui as Gui
     Gui.activeDocument().activeView().viewIsometric(); Gui.SendMsgToActiveView("ViewFit")
 except Exception: pass
-App.Console.PrintMessage("\nShroud v2 built: 2.5 mm standoffs, %d airflow holes, "
-    "4 corner cable hooks, %.1f mm grip chamfer.\n"%(len(grid_holes()),CHAMFER))
+App.Console.PrintMessage("\nShroud v2 built: %.1f mm standoffs, %d airflow holes, "
+    "4 corner cable hooks, %.1f mm grip chamfer.\n"%(STANDOFF,len(grid_holes()),CHAMFER))
