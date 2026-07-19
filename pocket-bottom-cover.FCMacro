@@ -1,0 +1,141 @@
+# -*- coding: utf-8 -*-
+# pocket_bottom_cover.FCMacro
+# A plain, parametric laptop bottom cover: rounded rectangle + 6 screw holes.
+# Identical to pocket_top_cover.FCMacro except the hole pattern: the bottom
+# cover has 3 screw holes on BOTH long edges (6 total), taken directly from
+# pref-keyboard-back-d1-fr4.kicad_pcb, instead of the top cover's 4+3 = 7.
+#
+# RUN:  Macro > Macros... > select this file > Execute.
+# EDIT: change the numbers in PARAMETERS, or double-click a sketch in the tree.
+# PRINT: after it builds, select the Body > File > Export > .stl or .step.
+
+import math
+import FreeCAD as App
+import Part
+
+# ============================ PARAMETERS =====================================
+L        = 200.216   # length  X (mm)
+W        = 125.794   # width   Y (mm)
+R        = 7.417     # corner radius (mm)
+T        = 1.5       # plate thickness (mm)
+HOLE_D   = 2.2       # screw hole diameter (mm)
+
+# screw holes, measured from the bottom-left corner (x, y).
+# Straight from the kicad_pcb: 3 holes on each long edge, symmetric.
+HOLES = [
+    (5.402,   5.402), (100.152, 5.402),   (194.852, 5.402),
+    (5.402, 120.452), (100.152, 120.452), (194.852, 120.452),
+]
+# =============================================================================
+
+doc = App.newDocument("BottomCover")
+body = doc.addObject("PartDesign::Body", "Body")
+
+# grab the body's XY origin plane to attach sketches to
+xy = None
+for f in body.Origin.OriginFeatures:
+    if "XY" in f.Label or "XY" in f.Name:
+        xy = f
+        break
+
+
+def new_sketch(name):
+    sk = doc.addObject("Sketcher::SketchObject", name)
+    body.addObject(sk)
+    if xy is not None:
+        sk.AttachmentSupport = [(xy, "")]
+        sk.MapMode = "FlatFace"
+    return sk
+
+
+# ---- outer profile: rounded rectangle (4 lines + 4 arcs) -------------------
+V = App.Vector
+Z = V(0, 0, 1)
+out = new_sketch("Sketch_Outline")
+
+lines_arcs = [
+    ("line", V(R, 0, 0),       V(L - R, 0, 0)),                 # bottom
+    ("arc",  V(L - R, R, 0),   -math.pi / 2, 0.0),              # BR corner
+    ("line", V(L, R, 0),       V(L, W - R, 0)),                 # right
+    ("arc",  V(L - R, W - R, 0), 0.0, math.pi / 2),             # TR corner
+    ("line", V(L - R, W, 0),   V(R, W, 0)),                     # top
+    ("arc",  V(R, W - R, 0),   math.pi / 2, math.pi),          # TL corner
+    ("line", V(0, W - R, 0),   V(0, R, 0)),                     # left
+    ("arc",  V(R, R, 0),       math.pi, 3 * math.pi / 2),      # BL corner
+]
+for spec in lines_arcs:
+    if spec[0] == "line":
+        out.addGeometry(Part.LineSegment(spec[1], spec[2]), False)
+    else:
+        _, center, a0, a1 = spec
+        out.addGeometry(Part.ArcOfCircle(Part.Circle(center, Z, R), a0, a1), False)
+
+# stitch the 8 segments end-to-end so the wire is closed (needed for Pad)
+import Sketcher
+n = out.GeometryCount
+for i in range(n):
+    out.addConstraint(Sketcher.Constraint("Coincident", i, 2, (i + 1) % n, 1))
+doc.recompute()
+
+pad = doc.addObject("PartDesign::Pad", "Plate")
+pad.Profile = out
+pad.Length = T
+body.addObject(pad)
+doc.recompute()
+
+# ---- 6 screw holes ---------------------------------------------------------
+hs = new_sketch("Sketch_Holes")
+for (x, y) in HOLES:
+    hs.addGeometry(Part.Circle(V(x, y, 0), Z, HOLE_D / 2.0), False)
+doc.recompute()
+
+pocket = doc.addObject("PartDesign::Pocket", "ScrewHoles")
+pocket.Profile = hs
+pocket.Reversed = True          # cut upward, through the plate
+pocket.Length = T + 1.0         # a hair past the top face = clean through-holes
+body.addObject(pocket)
+doc.recompute()
+
+# ---- chamfer the top perimeter edge (nicer feel, hides layer lines) --------
+CHAMFER = 0.5  # mm
+
+# IMPORTANT: select edges from pocket.Shape (the feature we're chamfering),
+# not pad.Shape -- cutting the holes renumbers every edge, so indices taken
+# from the un-pocketed pad never match up with the pocketed body.
+top_edge_names = []
+for i, edge in enumerate(pocket.Shape.Edges):
+    bb = edge.BoundBox
+    flat_on_top = abs(bb.ZMin - T) < 1e-6 and abs(bb.ZMax - T) < 1e-6
+    if not flat_on_top:
+        continue
+    # Both the straight sides and the big corner arcs are part of the outer
+    # perimeter; the hole rims are also flat circles at Z=T but much smaller.
+    # A bounding-box-diagonal threshold cleanly tells them apart
+    # (holes ~3.1mm diagonal, corner arcs ~10.5mm, sides much larger).
+    diag = math.hypot(bb.XLength, bb.YLength)
+    if diag > 5.0:
+        top_edge_names.append(f"Edge{i + 1}")
+
+if not top_edge_names:
+    raise RuntimeError(
+        "No perimeter edges matched for the chamfer -- check T and R against "
+        "the actual model, or chamfer the top face manually in the GUI."
+    )
+
+chamfer = doc.addObject("PartDesign::Chamfer", "TopChamfer")
+chamfer.Base = (pocket, top_edge_names)
+chamfer.Size = CHAMFER
+body.addObject(chamfer)
+doc.recompute()
+
+try:
+    import FreeCADGui as Gui
+    Gui.activeDocument().activeView().viewIsometric()
+    Gui.SendMsgToActiveView("ViewFit")
+except Exception:
+    pass
+
+App.Console.PrintMessage(
+    "\nBottom cover built: %.1f x %.1f x %.1f mm, %d holes O%.1f.\n"
+    "Edit dimensions in the PARAMETERS block and re-run, or double-click a "
+    "sketch to reshape it.\n" % (L, W, T, len(HOLES), HOLE_D))
