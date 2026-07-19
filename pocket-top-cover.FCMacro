@@ -13,11 +13,11 @@ import FreeCAD as App
 import Part
 
 # ============================ PARAMETERS =====================================
-L        = 200.216   # length  X (mm)
-W        = 125.794   # width   Y (mm)
-R        = 7.417      # corner radius (mm)
-T        = 1.5       # plate thickness (mm)
-HOLE_D   = 2.2       # screw hole diameter (mm)
+L        = 200.2    # length  X (mm)
+W        = 125.8    # width   Y (mm)
+R        = 7.417    # corner radius (mm)
+T        = 1.5      # plate thickness (mm)
+HOLE_D   = 2.2      # screw hole diameter (mm)
 
 # screw holes, measured from the bott-left corner (x, y):
 HOLES = [
