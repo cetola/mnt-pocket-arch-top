@@ -8,7 +8,8 @@
 # Built as ONE parametric Part Design Body:
 #   Sketch_Base    -> Pad "Base"        (wide heft slab, below the cover)
 #   Sketch_Cover   -> Pad "Cover"       (fit-critical plateau that seats in the laptop)
-#   FilletBottom   -> Fillet            (lap-contact edge)         [FILLETS toggle]
+#   LeadInChamfer  -> Chamfer           (45deg printable lead-in)  [FILLETS toggle]
+#   FilletBottom   -> Fillet            (lap-contact edge, blends off the chamfer)
 #   FilletTopLip   -> Fillet            (grip lip / shelf edge)    [FILLETS toggle]
 #   Sketch_Screws  -> Pocket "Screws"   (6 holes through base+cover)
 #   Sketch_Cbores  -> Pocket "Cbores"   (head recess in base bottom)
@@ -17,9 +18,9 @@
 #
 # TWO OPTIONS with clear on/off switches:  FILLETS  and  BALLAST  (below).
 #
-# Print orientation: base flat on the bed (cover pointing up). The bottom fillet
-# then sits on the bed -- if your slicer dislikes that, drop FILLET_BOTTOM to 0
-# and use a chamfer, or print cover-down.
+# Print orientation: base flat on the bed, cover pointing up. The bottom edge
+# leads in at 45deg (printable) and the fillet blends out of it higher up, so
+# the lap-contact edge is rounded without an unprintable overhang at layer 1.
 
 import math
 import FreeCAD as App
@@ -37,20 +38,34 @@ HOLES = [(5.402,   5.402), (100.152, 5.402),   (194.852, 5.402),
          (5.402, 120.452), (100.152, 120.452), (194.852, 120.452)]
 
 # ---- heft base ----
-BASE_T      = 5.0    # base slab thickness (more = heavier + deeper ballast)
+BASE_T      = 8.0    # base slab thickness (more = heavier + deeper ballast)
 OVER_LR     = 20.0   # base overhang beyond cover, left & right each
 OVER_FRONT  = 25.0   # base overhang beyond cover, front (-Y)
 OVER_BACK   = 49.0   # base overhang beyond cover, back  (+Y, under the cooler)
 BASE_R      = 10.0   # base corner radius (bigger than cover = comfier corners)
 
-# ---- screw head recess in the base bottom (set CBORE_DEPTH=0 to skip) ----
-CBORE_D     = 4.5
-CBORE_DEPTH = 2.5
+# ---- screw head bore through the base ----
+# The screws are a CLEARANCE fit -- their threads engage the laptop standoff, not
+# this part. So the narrow 2.2mm section must only be as long as the screw expects
+# to pass through plastic: COVER_T (1.5mm), exactly like the bare cover. Making the
+# 4.5mm bore run the FULL base thickness leaves precisely COVER_T of narrow hole
+# above it, so your existing cover-length screws reach the standoff. Tied to BASE_T
+# so it stays correct if the base thickness ever changes.
+# (Printed base-down, the 4.5->2.2 neck bridges at the base/cover line -- a small
+#  ~1.15mm annular overhang, usually fine. For a flush FLAT-HEAD screw with no
+#  bridge at all, ask for a conical countersink instead.)
+CBORE_D     = 4.5     # clearance for the M2 head + a small driver (raise if tight)
+CBORE_DEPTH = BASE_T  # full base -> narrow hole above = COVER_T, matching the cover
 
 # ============================ OPTION 1: FILLETS ==============================
 FILLETS       = True    # <<< on/off switch for the comfort fillets
 FILLET_BOTTOM = 3.0     # bottom outer edge radius (rests on lap) -- the big win
-FILLET_TOP    = 1.5     # top outer shelf-lip radius (where fingers lift it)
+CHAMFER_LEAD  = 2.0     # 45-deg lead-in at the very bottom, UNDER the fillet.
+                        # A plain fillet on a bottom edge starts near-horizontal
+                        # at the plate (unprintable overhang). This 45-deg lead-in
+                        # prints cleanly, and the fillet blends tangentially out of
+                        # it -- rounded feel up top, printable 45 deg at the base.
+FILLET_TOP    = 1.5     # top outer shelf-lip radius (faces up, plain fillet is fine)
 
 # ============================ OPTION 2: BALLAST =============================
 BALLAST       = False    # <<< on/off switch for the pour-in ballast cavity
@@ -115,8 +130,7 @@ add_rounded_rect(sc, 0, 0, L, W, R)
 doc.recompute(); tip = pad(sc, COVER_T, "Cover")               # z[0, COVER_T]
 
 # ---- fillets (done on the clean slab, before any holes) ----
-def fillet_outer(name, zlvl, rad):
-    global tip
+def _outer_edge_names(zlvl):
     names = []
     for i, e in enumerate(tip.Shape.Edges):
         bb = e.BoundBox
@@ -124,6 +138,11 @@ def fillet_outer(name, zlvl, rad):
             if (abs(bb.XMin-bx0) < 1e-2 or abs(bb.XMax-bx1) < 1e-2 or
                 abs(bb.YMin-by0) < 1e-2 or abs(bb.YMax-by1) < 1e-2):
                 names.append("Edge%d" % (i+1))
+    return names
+
+def fillet_outer(name, zlvl, rad):
+    global tip
+    names = _outer_edge_names(zlvl)
     if not names:
         App.Console.PrintWarning("%s: no matching edges, skipped.\n" % name); return
     try:
@@ -134,9 +153,27 @@ def fillet_outer(name, zlvl, rad):
         App.Console.PrintWarning("%s failed (%s) - lower the radius or fillet by "
                                  "hand.\n" % (name, str(ex)[:50]))
 
+def chamfer_outer(name, zlvl, size):
+    global tip
+    names = _outer_edge_names(zlvl)
+    if not names:
+        App.Console.PrintWarning("%s: no matching edges, skipped.\n" % name); return
+    try:
+        c = doc.addObject("PartDesign::Chamfer", name)
+        c.Base = (tip, names); c.Size = size
+        body.addObject(c); doc.recompute(); tip = c
+    except Exception as ex:
+        App.Console.PrintWarning("%s failed (%s) - lower the size or chamfer by "
+                                 "hand.\n" % (name, str(ex)[:50]))
+
 if FILLETS:
-    fillet_outer("FilletBottom", -BASE_T, FILLET_BOTTOM)
-    fillet_outer("FilletTopLip", 0.0,     FILLET_TOP)
+    # bottom edge: 45-deg chamfer lead-in first, then fillet the chamfer's top
+    # edge -- OCC makes that fillet tangent to BOTH the 45-deg face and the wall,
+    # so it flows 45deg -> curve -> vertical with no hard sub-edge between them.
+    chamfer_outer("LeadInChamfer", -BASE_T, CHAMFER_LEAD)
+    fillet_outer("FilletBottom", -BASE_T + CHAMFER_LEAD, FILLET_BOTTOM)
+    # top lip faces up when printing base-down, so a plain fillet prints fine
+    fillet_outer("FilletTopLip", 0.0, FILLET_TOP)
 
 # ---- screw holes: through base + cover (sketch on top face, cut down) ----
 ss = new_sketch("Sketch_Screws", zoff=COVER_T); add_circles(ss, HOLES, HOLE_D)
