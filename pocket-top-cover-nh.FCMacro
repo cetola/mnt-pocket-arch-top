@@ -1,0 +1,312 @@
+# -*- coding: utf-8 -*-
+# pocket-top-cover-nh.FCMacro
+#
+# Parametric replacement for the hand-edited pocket-top-cover-v3-nh.FCStd. Built up in
+# stages across print tests instead of all at once -- each stage is a toggle below, off
+# until its turn. Same starting point either way: pocket-top-cover.FCMacro's plain lid
+# (rounded rect + 7 chassis screw holes + top chamfer).
+#
+# STAGE 1 (2026-07-20, printed): base lid + CPU pocket + vent pocket only. Confirmed the
+# CPU pocket is actually square (40.5x40.5, corrected from an earlier 42x40.5 guess) and
+# that its position lands correctly on the real board.
+#
+# STAGE 2 (2026-07-20, current): mounting holes. The original plan here was a tall chimney
+# wall + printed posts + heat-set inserts, sized to reach up to the fan's own 4 corner
+# screw holes -- that whole scheme is now OBSOLETE, replaced by something much simpler
+# found by actually looking at the real heatsink: with the spring arms removed, the
+# heatsink itself still has 4 threaded M4 holes on its base (where those arms used to
+# attach) on the north/south sides of the CPU pocket. Screwing straight into those reuses
+# the manufacturer's own designed clamping points -- no heat-set inserts needed (the
+# threads already exist in the aluminum), no tall structure needed (those bosses sit near
+# the base, not up near the fan; a tall chimney was never actually required to *reach*
+# them). Just two reinforcement ribs added on the underside (invisible from outside) plus
+# 4 through-holes, measured directly off the real heatsink:
+#   - Thread: M4-0.7, confirmed with a thread checker.
+#   - Hole depth: 3.5mm max (measured by driving a screw in as far as it physically goes).
+#   - Hole positions: 4.5mm out from the (now-square) CPU pocket edge to hole centre, the
+#     pair on each side 22mm apart, symmetric about the pocket's centreline. (An
+#     independent "9mm from the pocket edge" measurement checks out to within ~0.25mm --
+#     rounding noise, not a real discrepancy.)
+#   - Screw recommendation: M4-0.7 x 6mm button head socket cap. Button head spreads
+#     clamp load without a countersink's crack-prone wedging action; hex socket gives
+#     controlled torque so tightening it doesn't crack the reinforced plastic. Plain
+#     proud head for this stage (no counterbore yet) -- keep it simple until the basic
+#     screw-into-heatsink concept is confirmed to actually hold; flush counterboring is a
+#     later cosmetic pass, not needed to validate the mechanism.
+#   - 6mm screw - 3.0mm local plastic thickness (1.5mm plate + 1.5mm added rib) = 3.0mm
+#     thread engagement, 0.5mm short of the measured 3.5mm max depth for margin.
+#
+# ORIENTATION / KEYING: the lid is NOT rotationally symmetric -- 4 screw holes along one
+# long edge, 3 along the other (see HOLES below), so it only fits the chassis one way.
+# The CPU_POCKET/VENT_POCKET coordinates were cross-checked against the real v3-nh.FCStd
+# two independent ways (that file's "Sketch" object has a zero-rotation Placement, AND the
+# actual baked solid's pocket edges were read back in global coordinates) and both agree
+# with the values here -- so these pockets are already correctly positioned relative to
+# the keyed hole pattern, not copied blind from a possibly-different local sketch frame.
+#
+# Built as ONE parametric Part Design Body:
+#   Sketch_Outline    -> Pad     "Plate"       (the fit-critical lid, unchanged from base)
+#   Sketch_Holes      -> Pocket  "ScrewHoles"  (7 chassis screw holes, unchanged from base)
+#   (edge select)     -> Chamfer "TopChamfer"  (0.5mm perimeter, unchanged from base)
+#   Sketch_CPUPocket  -> Pocket  "CPUPocket"   (window for the heatsink base to pass through)
+#   Sketch_VentPocket -> Pocket  "VentPocket"  (window for airflow + wire pass-through)
+#   Sketch_MountRibs  -> Pad     "MountRibs"   (2 reinforcement ribs, underside only, flush
+#                                                with the CPU pocket edge -- north & south)
+#   Sketch_MountHoles -> Pocket  "MountHoles"  (4 M4 clearance holes through plate+rib,
+#                                                straight into the heatsink's own threads)
+#
+# EVERYTHING marked "VERIFY" below is a placeholder or first guess -- measure the real
+# parts before printing. The v1->v2 fan-size correction in nh-l9-cover.FCMacro is a good
+# reminder why: a wrong converted/assumed dimension sat unnoticed until someone put
+# calipers on the real part.
+
+import math
+import FreeCAD as App
+import Part
+import Sketcher
+
+# ============================ PARAMETERS =====================================
+# ---- fit-critical lid (do not change unless the laptop chassis opening changes) ----
+L        = 200.2     # lid length X (mm)  -- from pocket-top-cover.FCMacro
+W        = 125.8     # lid width  Y (mm)
+R        = 7.417     # lid corner radius
+T        = 1.5       # lid thickness
+HOLE_D   = 2.2       # chassis screw hole diameter
+HOLES = [
+    (5.402,   4.902), (68.502,  4.902), (131.752, 4.902), (194.802, 4.902),
+    (5.402, 120.902), (194.802, 120.902), (100.102, 120.952),
+]
+TOP_CHAMFER = 0.5    # lid perimeter chamfer, same as the plain top cover
+
+# ---- CPU pocket: window for the (arms-removed) heatsink base to pass through ----
+# Confirmed square (2026-07-20) and correctly positioned against the real board (stage 1
+# print test).
+CPU_POCKET_L  = 40.5     # X size
+CPU_POCKET_W  = 40.5     # Y size
+CPU_POCKET_CX = 85.75    # centre X, lid-local coordinates (same frame as HOLES above)
+CPU_POCKET_CY = 70.0     # centre Y
+
+# ---- vent pocket: airflow + a few wires pulled out through the lid ----
+VENT_POCKET_L  = 40.0
+VENT_POCKET_W  = 65.66
+VENT_POCKET_R  = 10.0    # corner radius
+VENT_POCKET_CX = 160.0   # VERIFY -- carried over from v3-nh, offset from the CPU pocket
+VENT_POCKET_CY = 72.83
+
+# ---- mounting: screw straight into the heatsink's own 4 threaded M4 holes ----
+# All measured directly off the real heatsink 2026-07-20 (see the STAGE 2 note up top for
+# the full reasoning behind ditching the chimney/posts/insert-bore plan).
+ADD_MOUNTS         = True   # <<< on/off switch for this stage
+MOUNT_HOLE_D        = 4.5    # M4 clearance hole diameter
+MOUNT_HOLE_OFFSET   = 4.5    # measured: CPU pocket edge -> hole centre
+MOUNT_HOLE_SPACING  = 22.0   # measured: the 2 holes on the same side, centre to centre
+                              # (an independent "9mm from the pocket edge" measurement
+                              # gives +/-11.25 here vs. this figure's +/-11.0 -- ~0.25mm
+                              # apart, rounding noise, not a real conflict)
+MOUNT_RIB_ADD_T     = 1.5    # extra thickness added on the underside only (hidden) --
+                              # 1.5mm plate + 1.5mm rib = 3.0mm local thickness, giving
+                              # 3.0mm of thread engagement with a 6mm screw (0.5mm short
+                              # of the measured 3.5mm max hole depth, for margin)
+MOUNT_RIB_DEPTH     = 10.0   # how far each rib extends out from the pocket edge (must be
+                              # > MOUNT_HOLE_OFFSET so the holes actually land on the rib)
+MOUNT_RIB_MARGIN_X  = 5.0    # rib overhang past the outermost hole on each end
+# =============================================================================
+
+doc = App.newDocument("TopCoverNH")
+body = doc.addObject("PartDesign::Body", "Body")
+V = App.Vector
+Z = V(0, 0, 1)
+
+xy = None
+for f in body.Origin.OriginFeatures:
+    if "XY" in f.Label or "XY" in f.Name:
+        xy = f
+        break
+
+
+def new_sketch(name, zoff=0.0):
+    sk = doc.addObject("Sketcher::SketchObject", name)
+    body.addObject(sk)
+    if xy is not None:
+        sk.AttachmentSupport = [(xy, "")]
+        sk.MapMode = "FlatFace"
+        if zoff:
+            pl = App.Placement()
+            pl.Base = V(0, 0, zoff)
+            sk.AttachmentOffset = pl
+    return sk
+
+
+def add_rounded_rect(sk, x0, y0, x1, y1, r):
+    i0 = sk.GeometryCount
+    segs = [
+        ("line", V(x0 + r, y0, 0),     V(x1 - r, y0, 0)),
+        ("arc",  V(x1 - r, y0 + r, 0), -math.pi / 2, 0.0),
+        ("line", V(x1, y0 + r, 0),     V(x1, y1 - r, 0)),
+        ("arc",  V(x1 - r, y1 - r, 0), 0.0, math.pi / 2),
+        ("line", V(x1 - r, y1, 0),     V(x0 + r, y1, 0)),
+        ("arc",  V(x0 + r, y1 - r, 0), math.pi / 2, math.pi),
+        ("line", V(x0, y1 - r, 0),     V(x0, y0 + r, 0)),
+        ("arc",  V(x0 + r, y0 + r, 0), math.pi, 3 * math.pi / 2),
+    ]
+    for s in segs:
+        if s[0] == "line":
+            sk.addGeometry(Part.LineSegment(s[1], s[2]), False)
+        else:
+            _, c, a0, a1 = s
+            sk.addGeometry(Part.ArcOfCircle(Part.Circle(c, Z, r), a0, a1), False)
+    for k in range(8):
+        sk.addConstraint(Sketcher.Constraint("Coincident", i0 + k, 2, i0 + (k + 1) % 8, 1))
+
+
+def add_rect(sk, x0, y0, x1, y1):
+    """Plain sharp-cornered rectangle -- add_rounded_rect(...,r=0) degenerates (a
+    zero-radius arc isn't valid geometry), so this is the r=0 case done properly."""
+    i0 = sk.GeometryCount
+    pts = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    for k in range(4):
+        a, b = pts[k], pts[(k + 1) % 4]
+        sk.addGeometry(Part.LineSegment(V(a[0], a[1], 0), V(b[0], b[1], 0)), False)
+    for k in range(4):
+        sk.addConstraint(Sketcher.Constraint("Coincident", i0 + k, 2, i0 + (k + 1) % 4, 1))
+
+
+def add_circles(sk, pts, dia):
+    for (x, y) in pts:
+        sk.addGeometry(Part.Circle(V(x, y, 0), Z, dia / 2.0), False)
+
+
+def pad(sketch, length, name, reversed=False):
+    p = doc.addObject("PartDesign::Pad", name)
+    p.Profile = sketch
+    p.Length = length
+    p.Reversed = reversed
+    body.addObject(p)
+    doc.recompute()
+    return p
+
+
+def pocket(sketch, length, name, reversed=False):
+    p = doc.addObject("PartDesign::Pocket", name)
+    p.Profile = sketch
+    p.Length = length
+    p.Reversed = reversed
+    body.addObject(p)
+    doc.recompute()
+    return p
+
+
+def chamfer_at(tip, name, zlvl, size, min_diag=5.0):
+    """Chamfer every flat edge at height zlvl whose bounding-box diagonal exceeds
+    min_diag -- filters out small hole rims the same way pocket-top-cover.FCMacro does."""
+    names = []
+    for i, e in enumerate(tip.Shape.Edges):
+        bb = e.BoundBox
+        if abs(bb.ZMin - zlvl) < 1e-6 and abs(bb.ZMax - zlvl) < 1e-6:
+            if math.hypot(bb.XLength, bb.YLength) > min_diag:
+                names.append("Edge%d" % (i + 1))
+    if not names:
+        App.Console.PrintWarning("%s: no matching edges, skipped.\n" % name)
+        return tip
+    try:
+        c = doc.addObject("PartDesign::Chamfer", name)
+        c.Base = (tip, names)
+        c.Size = size
+        body.addObject(c)
+        doc.recompute()
+        return c
+    except Exception as ex:
+        App.Console.PrintWarning(
+            "%s failed (%s) - lower the size or chamfer by hand.\n" % (name, str(ex)[:60]))
+        return tip
+
+
+# ---- base lid: outline, chassis screw holes, chamfer (unchanged from the plain macro) ----
+out = new_sketch("Sketch_Outline")
+add_rounded_rect(out, 0, 0, L, W, R)
+doc.recompute()
+tip = pad(out, T, "Plate")
+
+hs = new_sketch("Sketch_Holes")
+add_circles(hs, HOLES, HOLE_D)
+doc.recompute()
+tip = pocket(hs, T + 1.0, "ScrewHoles", reversed=True)
+
+tip = chamfer_at(tip, "TopChamfer", T, TOP_CHAMFER)
+
+# ---- CPU pocket: window through the lid for the heatsink base ----
+cx0, cx1 = CPU_POCKET_CX - CPU_POCKET_L / 2.0, CPU_POCKET_CX + CPU_POCKET_L / 2.0
+cy0, cy1 = CPU_POCKET_CY - CPU_POCKET_W / 2.0, CPU_POCKET_CY + CPU_POCKET_W / 2.0
+cpu_sk = new_sketch("Sketch_CPUPocket")
+add_rect(cpu_sk, cx0, cy0, cx1, cy1)
+doc.recompute()
+tip = pocket(cpu_sk, T + 1.0, "CPUPocket", reversed=True)
+
+# ---- vent pocket: airflow + wire pass-through ----
+vx0, vx1 = VENT_POCKET_CX - VENT_POCKET_L / 2.0, VENT_POCKET_CX + VENT_POCKET_L / 2.0
+vy0, vy1 = VENT_POCKET_CY - VENT_POCKET_W / 2.0, VENT_POCKET_CY + VENT_POCKET_W / 2.0
+vent_sk = new_sketch("Sketch_VentPocket")
+add_rounded_rect(vent_sk, vx0, vy0, vx1, vy1, VENT_POCKET_R)
+doc.recompute()
+tip = pocket(vent_sk, T + 1.0, "VentPocket", reversed=True)
+
+# ---- mounting: 2 reinforcement ribs (underside only) + 4 clearance holes straight into
+#      the heatsink's own threaded M4 holes ----
+if ADD_MOUNTS:
+    pocket_half_w = CPU_POCKET_W / 2.0
+    north_edge_y = CPU_POCKET_CY + pocket_half_w
+    south_edge_y = CPU_POCKET_CY - pocket_half_w
+    hole_x_off = MOUNT_HOLE_SPACING / 2.0
+    rib_x0 = CPU_POCKET_CX - hole_x_off - MOUNT_RIB_MARGIN_X
+    rib_x1 = CPU_POCKET_CX + hole_x_off + MOUNT_RIB_MARGIN_X
+
+    mount_holes = [
+        (CPU_POCKET_CX - hole_x_off, north_edge_y + MOUNT_HOLE_OFFSET),
+        (CPU_POCKET_CX + hole_x_off, north_edge_y + MOUNT_HOLE_OFFSET),
+        (CPU_POCKET_CX - hole_x_off, south_edge_y - MOUNT_HOLE_OFFSET),
+        (CPU_POCKET_CX + hole_x_off, south_edge_y - MOUNT_HOLE_OFFSET),
+    ]
+
+    # ribs: flush with the CPU pocket edge (not past it -- nothing should overhang into
+    # the pocket opening itself), extending outward onto solid material only. Added
+    # downward (underside, hidden) from the plate's bottom face -- confirmed empirically
+    # (not just assumed) that Pad with reversed=True at zoff=0 adds material in -Z here.
+    ribs_sk = new_sketch("Sketch_MountRibs")
+    add_rect(ribs_sk, rib_x0, north_edge_y, rib_x1, north_edge_y + MOUNT_RIB_DEPTH)
+    add_rect(ribs_sk, rib_x0, south_edge_y - MOUNT_RIB_DEPTH, rib_x1, south_edge_y)
+    doc.recompute()
+    tip = pad(ribs_sk, MOUNT_RIB_ADD_T, "MountRibs", reversed=True)
+
+    # clearance holes through both the plate and the rib below it. Sketched at the TOP
+    # face this time (zoff=T) -- confirmed empirically that Pocket needs reversed=FALSE
+    # here to cut downward through the combined material (opposite convention from Pad's
+    # reversed=True above; Pad and Pocket don't share the same sign convention).
+    mh_sk = new_sketch("Sketch_MountHoles", zoff=T)
+    add_circles(mh_sk, mount_holes, MOUNT_HOLE_D)
+    doc.recompute()
+    tip = pocket(mh_sk, T + MOUNT_RIB_ADD_T + 1.0, "MountHoles", reversed=False)
+
+body.Tip = tip
+doc.recompute()
+try:
+    import FreeCADGui as Gui
+    Gui.activeDocument().activeView().viewIsometric()
+    Gui.SendMsgToActiveView("ViewFit")
+except Exception:
+    pass
+
+App.Console.PrintMessage(
+    "\nTop cover (NH) built: %.1f x %.1f x %.1f mm lid.\n"
+    "  CPU pocket: %.1f x %.1f mm at (%.2f, %.2f)\n"
+    "  Vent pocket: %.1f x %.1f mm (r%.1f) at (%.2f, %.2f)\n"
+    "  Mounts: %s%s\n"
+    "UNVERIFIED, check before printing: vent pocket position against the real board.\n"
+    "Recommended screws: M4-0.7 x 6mm button head socket cap, ~3.0mm thread engagement "
+    "into the heatsink's own holes.\n"
+    % (L, W, T,
+       CPU_POCKET_L, CPU_POCKET_W, CPU_POCKET_CX, CPU_POCKET_CY,
+       VENT_POCKET_L, VENT_POCKET_W, VENT_POCKET_R, VENT_POCKET_CX, VENT_POCKET_CY,
+       "ON" if ADD_MOUNTS else "off",
+       (" (4x M%.1f holes, %.1fmm spacing, %.1fmm rib added underside)"
+        % (MOUNT_HOLE_D, MOUNT_HOLE_SPACING, MOUNT_RIB_ADD_T))
+       if ADD_MOUNTS else ""))
