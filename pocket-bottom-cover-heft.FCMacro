@@ -53,7 +53,7 @@ FILLET_BOTTOM = 3.0     # bottom outer edge radius (rests on lap) -- the big win
 FILLET_TOP    = 1.5     # top outer shelf-lip radius (where fingers lift it)
 
 # ============================ OPTION 2: BALLAST =============================
-BALLAST       = True    # <<< on/off switch for the pour-in ballast cavity
+BALLAST       = False    # <<< on/off switch for the pour-in ballast cavity
 BALLAST_MARGIN= 10.0    # wall left between cavity and base edges
 BALLAST_FLOOR = 1.2     # material left between cavity top and the cover
 BALLAST_LID   = 1.5     # depth/thickness of the flush lid rebate
