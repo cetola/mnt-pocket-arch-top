@@ -19,7 +19,10 @@
 # the manufacturer's own designed clamping points -- no heat-set inserts needed (the
 # threads already exist in the aluminum), no tall structure needed (those bosses sit near
 # the base, not up near the fan; a tall chimney was never actually required to *reach*
-# them). Just two reinforcement ribs added on the underside (invisible from outside) plus
+# them). Just two reinforcement ribs added on the top (outer) face, where the heatsink's
+# mounting flange actually rests -- it's wider than the CPU pocket, so it can't pass
+# through and sits on the lid's outer surface around the pocket rim, not hanging inside
+# the laptop (corrected 2026-07-21, first print had the ribs on the wrong face) -- plus
 # 4 through-holes, measured directly off the real heatsink:
 #   - Thread: M4-0.7, confirmed with a thread checker.
 #   - Hole depth: 3.5mm max (measured by driving a screw in as far as it physically goes).
@@ -50,7 +53,7 @@
 #   (edge select)     -> Chamfer "TopChamfer"  (0.5mm perimeter, unchanged from base)
 #   Sketch_CPUPocket  -> Pocket  "CPUPocket"   (window for the heatsink base to pass through)
 #   Sketch_VentPocket -> Pocket  "VentPocket"  (window for airflow + wire pass-through)
-#   Sketch_MountRibs  -> Pad     "MountRibs"   (2 reinforcement ribs, underside only, flush
+#   Sketch_MountRibs  -> Pad     "MountRibs"   (2 reinforcement ribs, top face, flush
 #                                                with the CPU pocket edge -- north & south)
 #   Sketch_MountHoles -> Pocket  "MountHoles"  (4 M4 clearance holes through plate+rib,
 #                                                straight into the heatsink's own threads)
@@ -103,7 +106,7 @@ MOUNT_HOLE_SPACING  = 22.0   # measured: the 2 holes on the same side, centre to
                               # (an independent "9mm from the pocket edge" measurement
                               # gives +/-11.25 here vs. this figure's +/-11.0 -- ~0.25mm
                               # apart, rounding noise, not a real conflict)
-MOUNT_RIB_ADD_T     = 1.5    # extra thickness added on the underside only (hidden) --
+MOUNT_RIB_ADD_T     = 1.5    # extra thickness added on the top face, where the flange rests --
                               # 1.5mm plate + 1.5mm rib = 3.0mm local thickness, giving
                               # 3.0mm of thread engagement with a 6mm screw (0.5mm short
                               # of the measured 3.5mm max hole depth, for margin)
@@ -250,7 +253,7 @@ add_rounded_rect(vent_sk, vx0, vy0, vx1, vy1, VENT_POCKET_R)
 doc.recompute()
 tip = pocket(vent_sk, T + 1.0, "VentPocket", reversed=True)
 
-# ---- mounting: 2 reinforcement ribs (underside only) + 4 clearance holes straight into
+# ---- mounting: 2 reinforcement ribs (top face) + 4 clearance holes straight into
 #      the heatsink's own threaded M4 holes ----
 if ADD_MOUNTS:
     pocket_half_w = CPU_POCKET_W / 2.0
@@ -268,20 +271,24 @@ if ADD_MOUNTS:
     ]
 
     # ribs: flush with the CPU pocket edge (not past it -- nothing should overhang into
-    # the pocket opening itself), extending outward onto solid material only. Added
-    # downward (underside, hidden) from the plate's bottom face -- confirmed empirically
-    # (not just assumed) that Pad with reversed=True at zoff=0 adds material in -Z here.
-    ribs_sk = new_sketch("Sketch_MountRibs")
+    # the pocket opening itself), extending outward onto solid material only. Added on
+    # the TOP face (2026-07-21 correction: the heatsink's flange is wider than the pocket,
+    # so it rests on the lid's outer surface around the pocket rim, not hanging inside the
+    # laptop -- the reinforcement has to be right where the flange actually sits). Sketch
+    # at zoff=T, Pad reversed=False -- confirmed empirically (not just assumed) that this
+    # grows material in +Z (upward, on top of the existing plate) here.
+    ribs_sk = new_sketch("Sketch_MountRibs", zoff=T)
     add_rect(ribs_sk, rib_x0, north_edge_y, rib_x1, north_edge_y + MOUNT_RIB_DEPTH)
     add_rect(ribs_sk, rib_x0, south_edge_y - MOUNT_RIB_DEPTH, rib_x1, south_edge_y)
     doc.recompute()
-    tip = pad(ribs_sk, MOUNT_RIB_ADD_T, "MountRibs", reversed=True)
+    tip = pad(ribs_sk, MOUNT_RIB_ADD_T, "MountRibs", reversed=False)
 
-    # clearance holes through both the plate and the rib below it. Sketched at the TOP
-    # face this time (zoff=T) -- confirmed empirically that Pocket needs reversed=FALSE
-    # here to cut downward through the combined material (opposite convention from Pad's
-    # reversed=True above; Pad and Pocket don't share the same sign convention).
-    mh_sk = new_sketch("Sketch_MountHoles", zoff=T)
+    # clearance holes through both the rib and the plate below it. Sketched at the NEW
+    # top face (zoff=T+MOUNT_RIB_ADD_T, i.e. the top of the rib now, not the bare plate)
+    # -- confirmed empirically that Pocket needs reversed=FALSE here too, cutting downward
+    # through the combined material (same "sketch at the top of the current stack,
+    # reversed=False cuts down" pattern as before, just at the new top Z).
+    mh_sk = new_sketch("Sketch_MountHoles", zoff=T + MOUNT_RIB_ADD_T)
     add_circles(mh_sk, mount_holes, MOUNT_HOLE_D)
     doc.recompute()
     tip = pocket(mh_sk, T + MOUNT_RIB_ADD_T + 1.0, "MountHoles", reversed=False)
@@ -307,6 +314,6 @@ App.Console.PrintMessage(
        CPU_POCKET_L, CPU_POCKET_W, CPU_POCKET_CX, CPU_POCKET_CY,
        VENT_POCKET_L, VENT_POCKET_W, VENT_POCKET_R, VENT_POCKET_CX, VENT_POCKET_CY,
        "ON" if ADD_MOUNTS else "off",
-       (" (4x M%.1f holes, %.1fmm spacing, %.1fmm rib added underside)"
+       (" (4x M%.1f holes, %.1fmm spacing, %.1fmm rib added on top)"
         % (MOUNT_HOLE_D, MOUNT_HOLE_SPACING, MOUNT_RIB_ADD_T))
        if ADD_MOUNTS else ""))
