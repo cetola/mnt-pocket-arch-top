@@ -13,7 +13,10 @@
 #   FilletTopLip   -> Fillet            (grip lip / shelf edge)    [FILLETS toggle]
 #   Sketch_Screws  -> Pocket "Screws"   (6 holes through base+cover)
 #   Sketch_Cbores  -> Pocket "Cbores"   (head recess in base bottom)
-#   Sketch_Ballast -> Pocket "Ballast"  (pour-in ballast cavity)   [BALLAST toggle]
+#   Sketch_Ballast -> Pocket "Ballast"  (pour-in ballast cavity, printed as a grid of
+#                                         small cells separated by standing ribs, not one
+#                                         giant pocket -- see BALLAST_RIBS_X/Y below for
+#                                         why)                     [BALLAST toggle]
 #   Sketch_Lid     -> Pocket "LidRebate"(flush lid ledge)          [BALLAST toggle]
 #
 # TWO OPTIONS with clear on/off switches:  FILLETS  and  BALLAST  (below).
@@ -74,6 +77,23 @@ BALLAST_FLOOR = 1.2     # material left between cavity top and the cover
 BALLAST_LID   = 1.5     # depth/thickness of the flush lid rebate
 LID_LIP       = 2.0     # how far the lid ledge extends past the cavity wall
 # Cavity defaults to the BACK shelf (clear of all screws, under the cooler).
+#
+# The cavity ceiling (BALLAST_FLOOR, ~1mm) is an unsupported bridge over whatever the
+# cavity's footprint is -- at the full ~220 x 36mm span this part defaults to, that's WAY
+# past any FDM printer's bridging limit and would sag or fail outright, not just print a
+# little rough like the small screw-hole bridges do. BALLAST_RIBS_X/Y leave thin printed
+# walls standing inside the cavity, splitting one impossible bridge into a grid of small,
+# easily-bridgeable ones. Ballast is poured in loose (shot/sand) so ribs don't defeat the
+# purpose -- material just settles around them.
+#   X = the part's longer axis (the ~220mm span -- needs more subdivision)
+#   Y = the part's shorter axis (the ~36mm span -- needs less, or none)
+# Defaults below target roughly <=17mm per unsupported span either way; tune for your
+# printer/material. Setting either to 0 reproduces the original single-bridge behaviour
+# on that axis.
+BALLAST_RIBS_X = 10     # rib count dividing the long axis into (RIBS_X + 1) columns
+BALLAST_RIBS_Y = 1      # rib count dividing the short axis into (RIBS_Y + 1) rows
+BALLAST_RIB_W  = 3.0    # rib wall thickness (both axes)
+BALLAST_CELL_R = 3.0    # corner radius per grid cell (clamped down for small cells)
 # =============================================================================
 
 bx0, bx1 = -OVER_LR, L + OVER_LR
@@ -140,31 +160,28 @@ def _outer_edge_names(zlvl):
                 names.append("Edge%d" % (i+1))
     return names
 
-def fillet_outer(name, zlvl, rad):
+# fillet_outer/chamfer_outer used to be two near-identical copies of the same edge-select
+# -> create-feature -> advance-tip logic, differing only in the PartDesign feature type and
+# which property holds the size (Radius vs Size). Shared here as one helper.
+def _outer_edge_feature(kind, name, zlvl, value):
     global tip
     names = _outer_edge_names(zlvl)
     if not names:
         App.Console.PrintWarning("%s: no matching edges, skipped.\n" % name); return
     try:
-        f = doc.addObject("PartDesign::Fillet", name)
-        f.Base = (tip, names); f.Radius = rad
+        f = doc.addObject("PartDesign::%s" % kind, name)
+        f.Base = (tip, names)
+        setattr(f, "Radius" if kind == "Fillet" else "Size", value)
         body.addObject(f); doc.recompute(); tip = f
     except Exception as ex:
-        App.Console.PrintWarning("%s failed (%s) - lower the radius or fillet by "
+        App.Console.PrintWarning("%s failed (%s) - lower the value or do it by "
                                  "hand.\n" % (name, str(ex)[:50]))
 
+def fillet_outer(name, zlvl, rad):
+    _outer_edge_feature("Fillet", name, zlvl, rad)
+
 def chamfer_outer(name, zlvl, size):
-    global tip
-    names = _outer_edge_names(zlvl)
-    if not names:
-        App.Console.PrintWarning("%s: no matching edges, skipped.\n" % name); return
-    try:
-        c = doc.addObject("PartDesign::Chamfer", name)
-        c.Base = (tip, names); c.Size = size
-        body.addObject(c); doc.recompute(); tip = c
-    except Exception as ex:
-        App.Console.PrintWarning("%s failed (%s) - lower the size or chamfer by "
-                                 "hand.\n" % (name, str(ex)[:50]))
+    _outer_edge_feature("Chamfer", name, zlvl, size)
 
 if FILLETS:
     # bottom edge: 45-deg chamfer lead-in first, then fillet the chamfer's top
@@ -189,9 +206,29 @@ if BALLAST:
     cx0, cx1 = bx0 + BALLAST_MARGIN, bx1 - BALLAST_MARGIN
     cy0, cy1 = W + 3.0, by1 - BALLAST_MARGIN
     depth = BASE_T - BALLAST_FLOOR
+
+    # grid of small pockets separated by BALLAST_RIB_W-thick standing walls, instead of
+    # one giant pocket -- see the printability note above BALLAST_RIBS_X/Y.
+    cols, rows = BALLAST_RIBS_X + 1, BALLAST_RIBS_Y + 1
+    col_w = ((cx1 - cx0) - BALLAST_RIBS_X * BALLAST_RIB_W) / cols
+    row_h = ((cy1 - cy0) - BALLAST_RIBS_Y * BALLAST_RIB_W) / rows
+    if col_w <= 0 or row_h <= 0:
+        raise RuntimeError("BALLAST_RIBS_X/Y too high (or BALLAST_RIB_W too wide) for the "
+                            "cavity size -- cells would have zero or negative area.")
+    cell_r = min(BALLAST_CELL_R, col_w / 2.0 - 0.1, row_h / 2.0 - 0.1)
+
     cav = new_sketch("Sketch_Ballast", zoff=-BASE_T)
-    add_rounded_rect(cav, cx0, cy0, cx1, cy1, 6.0)
+    for i in range(cols):
+        x0 = cx0 + i * (col_w + BALLAST_RIB_W)
+        x1 = x0 + col_w
+        for j in range(rows):
+            y0 = cy0 + j * (row_h + BALLAST_RIB_W)
+            y1 = y0 + row_h
+            # add_rounded_rect(...,r=0) degenerates -- a zero-radius arc isn't valid
+            # geometry -- so floor at a small imperceptible radius instead of exactly 0.
+            add_rounded_rect(cav, x0, y0, x1, y1, max(cell_r, 0.05))
     doc.recompute(); tip = pocket(cav, depth, "Ballast", reversed=True)
+
     lid = new_sketch("Sketch_Lid", zoff=-BASE_T)
     add_rounded_rect(lid, cx0-LID_LIP, cy0-LID_LIP, cx1+LID_LIP, cy1+LID_LIP, 7.0)
     doc.recompute(); tip = pocket(lid, BALLAST_LID, "LidRebate", reversed=True)
@@ -211,7 +248,10 @@ msg = ("\nHeft base built: %.0f x %.0f mm footprint, %.1f mm base + %.1f mm cove
           "ON" if FILLETS else "off", "ON" if BALLAST else "off",
           BASE_T+COVER_T+4, COVER_T))
 if BALLAST:
-    cav_cc = (bx1-bx0-2*BALLAST_MARGIN)*(by1-W-3.0-BALLAST_MARGIN)*(BASE_T-BALLAST_FLOOR)/1000.0
-    msg += ("  Ballast cavity ~%.0f cm3: ~%.0f g steel shot or ~%.0f g sand.\n"
-            % (cav_cc, cav_cc*4.5, cav_cc*1.6))
+    # exact grid-cell volume (air only, ribs excluded) -- not the old bounding-box
+    # estimate, which would now overcount by however much the ribs actually take up.
+    cav_cc = cols * rows * col_w * row_h * (BASE_T - BALLAST_FLOOR) / 1000.0
+    msg += ("  Ballast cavity ~%.0f cm3 (%dx%d cells, ribs excluded): "
+            "~%.0f g steel shot or ~%.0f g sand.\n"
+            % (cav_cc, cols, rows, cav_cc*4.5, cav_cc*1.6))
 App.Console.PrintMessage(msg)

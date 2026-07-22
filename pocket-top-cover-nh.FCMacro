@@ -30,14 +30,16 @@
 #     pair on each side 22mm apart, symmetric about the pocket's centreline. (An
 #     independent "9mm from the pocket edge" measurement checks out to within ~0.25mm --
 #     rounding noise, not a real discrepancy.)
-#   - Screw recommendation: M4-0.7 x 6mm button head socket cap. Button head spreads
-#     clamp load without a countersink's crack-prone wedging action; hex socket gives
-#     controlled torque so tightening it doesn't crack the reinforced plastic. Plain
-#     proud head for this stage (no counterbore yet) -- keep it simple until the basic
-#     screw-into-heatsink concept is confirmed to actually hold; flush counterboring is a
-#     later cosmetic pass, not needed to validate the mechanism.
-#   - 6mm screw - 3.0mm local plastic thickness (1.5mm plate + 1.5mm added rib) = 3.0mm
-#     thread engagement, 0.5mm short of the measured 3.5mm max depth for margin.
+#   - Original screw recommendation (M4x6 button head, no countersink) SUPERSEDED
+#     2026-07-21: MOUNT_RIB_ADD_T's original 1.5mm was holding the heatsink's flange up
+#     off the lid enough to break contact with the thermal pad, so it's now 0.25mm
+#     instead. That, plus switching to real candidate screws (McMaster
+#     90729A265/266/267, 316 SS hex-drive flat head, 100deg/1.6mm head) that need to seat
+#     flush, means the design now includes a proper countersink (MOUNT_CSK_DEPTH/ANGLE)
+#     instead of a plain proud-head clearance hole.
+#   - SCREW LENGTH IS CURRENTLY UNRESOLVED -- see the big comment block at MOUNT_CSK_DEPTH
+#     below. None of the three candidate STEP-file lengths are short enough for the
+#     thinner stack; don't print/order the mount holes as final until this is sorted.
 #
 # ORIENTATION / KEYING: the lid is NOT rotationally symmetric -- 4 screw holes along one
 # long edge, 3 along the other (see HOLES below), so it only fits the chassis one way.
@@ -57,6 +59,8 @@
 #                                                with the CPU pocket edge -- north & south)
 #   Sketch_MountHoles -> Pocket  "MountHoles"  (4 M4 clearance holes through plate+rib,
 #                                                straight into the heatsink's own threads)
+#   (edge select)     -> Chamfer "MountCountersink" (100deg/1.6mm flat-head countersink,
+#                                                      angle-mode chamfer on the 4 hole rims)
 #
 # EVERYTHING marked "VERIFY" below is a placeholder or first guess -- measure the real
 # parts before printing. The v1->v2 fan-size correction in nh-l9-cover.FCMacro is a good
@@ -106,13 +110,64 @@ MOUNT_HOLE_SPACING  = 22.0   # measured: the 2 holes on the same side, centre to
                               # (an independent "9mm from the pocket edge" measurement
                               # gives +/-11.25 here vs. this figure's +/-11.0 -- ~0.25mm
                               # apart, rounding noise, not a real conflict)
-MOUNT_RIB_ADD_T     = 1.5    # extra thickness added on the top face, where the flange rests --
-                              # 1.5mm plate + 1.5mm rib = 3.0mm local thickness, giving
-                              # 3.0mm of thread engagement with a 6mm screw (0.5mm short
-                              # of the measured 3.5mm max hole depth, for margin)
+MOUNT_RIB_ADD_T     = 0.25   # 2026-07-21: reduced from 1.5mm -- the thicker rib was holding
+                              # the heatsink's flange up off the lid enough to break contact
+                              # with the thermal pad. 1.5mm plate + 0.25mm rib = 1.75mm local
+                              # thickness now. See the screw-length note near MOUNT_CSK_* below
+                              # -- this reduction has a real, unresolved consequence for which
+                              # screw length actually works.
 MOUNT_RIB_DEPTH     = 10.0   # how far each rib extends out from the pocket edge (must be
                               # > MOUNT_HOLE_OFFSET so the holes actually land on the rib)
 MOUNT_RIB_MARGIN_X  = 5.0    # rib overhang past the outermost hole on each end
+
+# ---- countersink for a flat-head screw, seated flush (2026-07-21) ----
+# Candidate screws: McMaster 90729A265/266/267, "Passivated 316 Stainless Steel Hex-Drive
+# Flat Head Screw", M4, 100deg included head angle, 1.6mm head height (user-supplied spec,
+# cross-checked directly against the 90729A265 STEP file's own cone profile -- measured
+# 50.0deg half-angle from the axis = 100deg included, confirmed to 0.1 percent).
+#
+# FreeCAD's PartDesign::Chamfer "Distance and Angle" mode: Size = VERTICAL DEPTH from the
+# original face down to where the cone meets the original (uncountersunk) hole diameter,
+# NOT slant length -- confirmed correct in both a simplified throwaway test AND in this
+# actual file (bottoms out exactly at the specified depth both times, verified by
+# point-sampling the real geometry, not just "no build error").
+#
+# Angle is trickier: a simplified isolated test (single Pad + Pocket + Chamfer) gave
+# included_angle = 2*(90-Angle), i.e. Angle=40 -> 100deg included. Re-verified DIRECTLY IN
+# THIS FILE afterward (same technique, point-sampling the real Shape at multiple depths)
+# and got a different, contradicting result: Angle=40 here actually produces an 80deg
+# included cone, not 100deg. Re-derived empirically in place instead of trusting the
+# simplified test's extrapolation -- Angle=50 is what actually gives 100.00deg included
+# in this file (confirmed to 0.02deg via the same point-sampling method, and it builds
+# clean, no OCC error). Exact cause of the discrepancy not fully root-caused (rectangular
+# vs. circular base sketch and/or chamfering 4 holes' edges in one feature vs. 1 are the
+# two live theories) -- not chased further since the empirical value is what matters.
+# If MOUNT_HOLE_D, the rib shape, or the number of simultaneously-chamfered holes ever
+# changes, re-verify this value against the real file rather than assuming it still holds.
+MOUNT_CSK_DEPTH = 1.6     # matches the screw's 1.6mm head height -> head sits flush
+MOUNT_CSK_ANGLE = 50.0    # empirically verified IN THIS FILE to give 100deg included --
+                          # see note above, do not "correct" this back to 40 without re-testing
+MOUNT_CSK_INCLUDED_DEG = 100.0  # what MOUNT_CSK_ANGLE=50.0 actually produces (verified, not
+                                 # derived by formula -- print this directly, don't recompute
+                                 # it from MOUNT_CSK_ANGLE, since that relationship isn't
+                                 # reliably predictable in this file, see note above)
+
+# SCREW LENGTH -- UNRESOLVED, flagging rather than guessing:
+# Measured all three candidate STEP files directly (BoundBox, head-to-tip, independent of
+# each file's own internal origin placement, which isn't consistent across the three):
+#   90729A265: 6.226mm     90729A266: 8.226mm     90729A267: 10.226mm
+# For a flush-seated flat-head screw, "length" conventionally includes the head (measured
+# to the top flat, not just the shank under it) -- if that holds for these parts, then
+# engagement = screw_length - local_thickness, same formula as the old button-head design,
+# just with local_thickness now 1.75mm instead of 3.0mm. Even the SHORTEST candidate:
+#   6.226 - 1.75 = 4.476mm engagement into a hole with a MEASURED 3.5mm max depth
+# That overshoots by ~1mm -- would bottom out before the head ever seats flush. None of the
+# three candidates shown so far are short enough for the thinner rib. Needs either a
+# genuinely shorter screw (~4.75mm head-inclusive length for the same 0.5mm margin as
+# before) or confirmation this length-convention assumption is wrong for this specific
+# McMaster part family -- couldn't confirm via their product page (JS-rendered, no spec
+# table in the fetched content); would need an actual spec sheet/drawing to settle this
+# before ordering or printing.
 # =============================================================================
 
 doc = App.newDocument("TopCoverNH")
@@ -197,6 +252,36 @@ def pocket(sketch, length, name, reversed=False):
     body.addObject(p)
     doc.recompute()
     return p
+
+
+def countersink_at(tip, name, zlvl, hole_dia, depth, angle):
+    """Angled chamfer on small circular hole rims (diameter ~hole_dia) at height zlvl --
+    the mirror-image filter of chamfer_at's, which targets the large outer perimeter.
+    Cuts a cone with the given INCLUDED angle: FreeCAD's own 'Angle' property is measured
+    from the original face, not the axis, so it's passed through pre-converted by the
+    caller (see MOUNT_CSK_ANGLE's derivation) -- this function just applies it."""
+    names = []
+    for i, e in enumerate(tip.Shape.Edges):
+        bb = e.BoundBox
+        if abs(bb.ZMin - zlvl) < 1e-6 and abs(bb.ZMax - zlvl) < 1e-6:
+            if abs(bb.XLength - hole_dia) < 0.05 and abs(bb.YLength - hole_dia) < 0.05:
+                names.append("Edge%d" % (i + 1))
+    if not names:
+        App.Console.PrintWarning("%s: no matching edges, skipped.\n" % name)
+        return tip
+    try:
+        c = doc.addObject("PartDesign::Chamfer", name)
+        c.Base = (tip, names)
+        c.ChamferType = "Distance and Angle"
+        c.Size = depth
+        c.Angle = angle
+        body.addObject(c)
+        doc.recompute()
+        return c
+    except Exception as ex:
+        App.Console.PrintWarning(
+            "%s failed (%s) - lower the depth or do it by hand.\n" % (name, str(ex)[:60]))
+        return tip
 
 
 def chamfer_at(tip, name, zlvl, size, min_diag=5.0):
@@ -293,6 +378,11 @@ if ADD_MOUNTS:
     doc.recompute()
     tip = pocket(mh_sk, T + MOUNT_RIB_ADD_T + 1.0, "MountHoles", reversed=False)
 
+    # countersink so the flat-head screws seat flush -- see MOUNT_CSK_* above for the
+    # angle-convention derivation.
+    tip = countersink_at(tip, "MountCountersink", T + MOUNT_RIB_ADD_T,
+                          MOUNT_HOLE_D, MOUNT_CSK_DEPTH, MOUNT_CSK_ANGLE)
+
 body.Tip = tip
 doc.recompute()
 try:
@@ -302,18 +392,23 @@ try:
 except Exception:
     pass
 
+local_thickness = T + MOUNT_RIB_ADD_T
 App.Console.PrintMessage(
     "\nTop cover (NH) built: %.1f x %.1f x %.1f mm lid.\n"
     "  CPU pocket: %.1f x %.1f mm at (%.2f, %.2f)\n"
     "  Vent pocket: %.1f x %.1f mm (r%.1f) at (%.2f, %.2f)\n"
     "  Mounts: %s%s\n"
     "UNVERIFIED, check before printing: vent pocket position against the real board.\n"
-    "Recommended screws: M4-0.7 x 6mm button head socket cap, ~3.0mm thread engagement "
-    "into the heatsink's own holes.\n"
+    "SCREW LENGTH UNRESOLVED: local thickness is now %.2fmm. 90729A265/266/267 "
+    "(6.226/8.226/10.226mm head-inclusive, measured from the STEP files) are all too long "
+    "-- the shortest would engage ~%.2fmm into a hole with a measured 3.5mm max depth. "
+    "Do not print/order until this is resolved -- see the MOUNT_CSK_* comment block.\n"
     % (L, W, T,
        CPU_POCKET_L, CPU_POCKET_W, CPU_POCKET_CX, CPU_POCKET_CY,
        VENT_POCKET_L, VENT_POCKET_W, VENT_POCKET_R, VENT_POCKET_CX, VENT_POCKET_CY,
        "ON" if ADD_MOUNTS else "off",
-       (" (4x M%.1f holes, %.1fmm spacing, %.1fmm rib added on top)"
-        % (MOUNT_HOLE_D, MOUNT_HOLE_SPACING, MOUNT_RIB_ADD_T))
-       if ADD_MOUNTS else ""))
+       (" (4x M%.1f holes, %.1fmm spacing, %.2fmm rib on top, %.1fmm x %.0fdeg countersink)"
+        % (MOUNT_HOLE_D, MOUNT_HOLE_SPACING, MOUNT_RIB_ADD_T, MOUNT_CSK_DEPTH,
+           MOUNT_CSK_INCLUDED_DEG))
+       if ADD_MOUNTS else "",
+       local_thickness, 6.226 - local_thickness))

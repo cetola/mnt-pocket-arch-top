@@ -1,0 +1,506 @@
+# -*- coding: utf-8 -*-
+# nh-l9-cover-v3.FCMacro   (v3.3: v2's grille minus the corner cable hooks, + a chunky
+#                            snap-fit USB-hub cradle)
+#
+# v2's shroud (grille + posts) is reproduced here UNCHANGED -- "no issues there" per explicit
+# feedback, same parameters, same geometry -- EXCEPT the 4 corner cable hooks, removed
+# entirely per explicit request (2026-07-21: "not needed anymore").
+#
+# The USB-hub piece has now gone through TWO redesigns the same day:
+#   v3.0 (superseded): dropped a first, too-precision-fit channel/rail/lip + C-loop design
+#     for a flat platform + zip-tie straps holding the hub down, per: "the usb clip doesn't
+#     need to actually be a clip... don't worry about size... embrace [the screw holes]
+#     rather than designing around them... maybe just something I can zip tie the cables to."
+#   v3.1 (superseded): user liked the industrial direction but asked for 3 more changes --
+#     (1) stop using zip ties to hold the HUB itself, find a way that needs no other
+#     materials, (2) push the chunky/industrial feel even further, (3) move the cable zip-tie
+#     tab to the MIDDLE of the holder's length, not off one end. Result: the hub snapped
+#     straight down into a chunky, fully-enclosed cartridge-bay-style cradle (2 thick side
+#     rails with inward snap lips + 2 end walls), captured with no fasteners/ties at all; the
+#     cable tab a separate full-height block centred at X=0 off the cradle's far rail.
+#   v3.2 (superseded): two more real-world fixes to that cradle, after seeing it built --
+#     (1) the NEAR rail + its lip (the side facing the fan, directly across from the cable
+#     tie tab on the far side) was fully enclosing the hub on that edge too, which turned out
+#     to physically block access to the hub's own USB ports -- removed entirely, retention is
+#     now single-sided (far lip only) + the 2 end walls. (2) the hub's 2 short ends each have
+#     a 4.5mm cable exiting dead-centre -- cut a 5mm pass-through notch through both end
+#     walls, centred on the hub's own Y-centreline, so those cables aren't trapped inside the
+#     cradle. Zip ties are still used for the separate CABLE tab (never objected to) -- just
+#     not for the hub itself.
+#   v3.3 (current, this file): "Move the holes outward, closer to the edge with no wall on
+#     it, by 3mm" -- confirmed this means the 2 shared screw holes/bosses (`ClipHoles` +
+#     `ScrewBosses`), not the end-wall cable notches, after I flagged the consequence and the
+#     user chose it anyway: **`CLIP_SCREWS` is now offset from the Shroud's real `SCREW_DX`/
+#     `SCREW_DY` fan-screw position by `CLIP_HOLE_OUTWARD` (3mm, toward -Y/the near open
+#     edge) -- UsbClip's own holes no longer line up with the Shroud's real screw holes.**
+#     `CLIP_HOLE_OUTWARD=0.0` restores exact alignment if that turns out to be wrong. This is
+#     now a single, directly-editable parameter, per explicit request ("let me know if this
+#     is a parameter and I will simply edit the macro myself").
+#
+# Two PartDesign Bodies in one document, two separate printable parts:
+#   "Shroud"  -> fan grille + posts only (see nh-l9-cover-v2.FCMacro for where this came
+#                 from) -- corner cable hooks removed, everything else unchanged.
+#   "UsbClip" -> Built as (see BODY 2 below for full comments on each step):
+#     Platform -> PlatformChamfer -> ScrewBosses -> ClipHoles -> Rails(far only) -> EndWalls
+#     -> CableNotches -> Lips(far only) -> LipChamferFar -> CableTab -> CableSlots
+#
+# ASSUMPTIONS MADE HERE, not yet physically verified -- flag if any of these are wrong:
+#   - Which 2 of the fan's 4 screws: the "+Y pair" (SCREWS at y=+SCREW_DY). Arbitrary choice.
+#   - Hub orientation: long axis (107.4mm) parallel to the screw span (82.5mm apart); width
+#     (31.2mm) extends away from the fan.
+#   - Snap-fit retention: UNVERIFIED that the lip's lead-in chamfer + the rail's own
+#     elasticity is actually enough to let the hub snap in and out by hand at these chunky
+#     wall thicknesses (6mm) -- chunky and easy-to-flex pull in opposite directions, and this
+#     is the single biggest physical unknown in this design. If it prints too stiff to snap
+#     over, the fix is thinning `RAIL_T`/`LIP_T` locally at the lip only, not a full redesign.
+#     NOW EVEN MORE UNVERIFIED as of v3.2: retention is single-sided (far lip only, near rail
+#     removed entirely) -- untested whether one lip + the 2 end walls is actually enough to
+#     keep the hub seated, or whether the near side needs to be revisited once printed.
+#   - Zip-tie slot size (ZTIE_SLOT_LEN x ZTIE_SLOT_WID, cable tab only now): sized generously
+#     for a common tie, not measured against a specific real tie.
+#   - Cable notch position/size (`CABLE_GAP_W`=5mm, centred on the hub's own Y-centreline):
+#     matches the stated "4.5mm cable, dead-centre of each 30.5mm short end" -- not verified
+#     against the real hub, and cut through the FULL end-wall height (not just at whatever
+#     exact height the cable actually exits) since that height wasn't given.
+#
+# REAL, UNRESOLVED CONCERNS -- do not print/assemble without checking these:
+#   1. NEW in v3.3, the bigger one: with `CLIP_HOLE_OUTWARD` nonzero, UsbClip's 2 screw
+#      holes/bosses sit 3mm away from the Shroud's REAL fan-screw positions (`SCREW_DX`/
+#      `SCREW_DY`). The two parts can no longer share the exact same 2 screws through the
+#      exact same fan-threaded holes -- either UsbClip needs its own separate fasteners into
+#      something at the new position, or this needs rethinking before the two parts are
+#      actually stacked and screwed down together. Not resolved here; flagged for the user to
+#      decide how UsbClip actually attaches now.
+#   2. Stacking the clip on top of the grille adds `RAIL_TOP` (`PLATFORM_T+RAIL_H`, ~17mm at
+#      the cradle rim, though the 2 screws only pass through the `PLATFORM_T` (6mm)
+#      base+boss layer, not the full rail height) of material on top of what the grille alone
+#      already needed (STANDOFF + GRID_T = 3.0mm, per nh-l9-cover-v2.FCMacro). The screws
+#      currently holding the grille on are very unlikely to be long enough for this -- this
+#      file does not know the original screw length (never captured in nh-l9-cover-v2.FCMacro
+#      either) and cannot verify it. Check/replace with longer screws before assembling.
+
+import math
+import FreeCAD as App
+import Part
+import Sketcher
+
+# ============================ PARAMETERS =====================================
+# ---- v2 shroud parameters, UNCHANGED -- see nh-l9-cover-v2.FCMacro for the full history ----
+FAN_SIZE    = 92.0
+FAN_CORNER  = 5.0
+SCREW_DX    = 41.25
+SCREW_DY    = 41.25
+SCREW_D     = 4.5
+POST_D      = 9.0
+STANDOFF    = 0.5
+GRID_T      = 2.5
+CHAMFER     = 0.1
+
+HOLE_D      = 8.0
+PITCH       = 10.5
+GRID_AREA_R = 38.5
+
+# ---- NEW v3.1: chunky snap-fit hub cradle -- no zip ties on the hub itself, it snaps
+#      straight down into a fully-enclosed cartridge-bay tray and is captured under 2
+#      long-edge lips. Wall thicknesses bumped up across the board for a bolder industrial
+#      look, per explicit request to push further in that direction -- see header. ----
+HUB_L        = 107.4   # hub length (mm) -- ASSUMED parallel to the screw span
+HUB_W        = 31.2    # hub width (mm) -- ASSUMED extends away from the fan
+HUB_H        = 9.9     # hub height (mm), for reference -- RAIL_H is sized to clear it
+
+PLATFORM_MARGIN  = 6.0    # margin from the cradle's own outer footprint to the platform's edge
+PLATFORM_T       = 6.0    # base plate thickness -- heavier than v3.0's 5mm platform
+BOSS_D           = 24.0   # screw boss diameter -- bumped up from v3.0's 20mm, chunkier still
+
+HUB_CLEAR_SIDE   = 0.6    # per-side clearance between the hub and the cradle's inner walls
+                           # -- an ordinary FDM fit clearance, not a "precision" tight fit;
+                           # the chunkiness here is wall mass, not tolerance
+RAIL_T           = 6.0    # cradle side-rail wall thickness -- thick and deliberate
+RAIL_H           = 11.0   # cradle side-rail height above the platform's top face (clears
+                           # the hub's 9.9mm height plus room for the lip)
+END_WALL_T       = 6.0    # thickness of the 2 walls closing the cradle lengthwise, stopping
+                           # the hub from sliding out end-to-end
+LIP_DEPTH        = 2.2    # how far each snap lip overhangs inward past its rail's inner face
+LIP_T            = 2.5    # vertical thickness of the lip -- chunky, not a delicate edge
+LIP_CHAMFER      = 1.5    # lead-in chamfer on the lip's leading (innermost, bottom) edge, so
+                           # the hub cams the rail outward slightly on insertion instead of
+                           # jamming against a square corner -- see UNVERIFIED note in header
+BASE_CHAMFER     = 2.0    # bold bevel on the platform's bottom outer perimeter -- a visual/
+                           # industrial touch, same edge-detection technique as the Shroud's
+                           # own GripChamfer
+CABLE_GAP_W      = 5.0    # width of the pass-through notch cut through BOTH end walls,
+                           # centred on the hub's own Y-centreline, for the 4.5mm cable that
+                           # exits dead-centre of each 30.5mm short end -- see header
+
+# v3.2: the NEAR rail (RAIL_T thick, facing the fan) and its lip are REMOVED entirely --
+# they fully walled in the hub's near edge, which turned out to block access to the hub's
+# own USB ports. Retention is now single-sided: only the FAR rail + its lip, plus the 2 end
+# walls constraining the hub lengthwise. `RAIL_RELIEF_D` (the old screw-access relief cut
+# through the near rail/lip) is gone along with it -- nothing left there to relieve.
+
+# ---- separate cable zip-tie tab -- still zip-tie based (only the HUB retention changed),
+#      now centred at X=0 (the MIDDLE of the holder's length), not off one end ----
+CTAB_LEN       = 22.0   # how far the tab projects beyond the cradle's far rail, in +Y
+CTAB_WIDTH     = 30.0   # tab width (X), centred on the cradle's own X=0 centreline
+CTAB_OVERLAP   = 3.0    # overlap into the far rail so the Pad fuses solidly
+ZTIE_SLOT_LEN  = 10.0   # zip-tie slot length (long axis)
+ZTIE_SLOT_WID  = 5.0    # zip-tie slot width -- fits a common zip tie with room to spare
+CTAB_SLOT_GAP  = 14.0   # spacing between the tab's 2 zip-tie slots
+
+CLIP_HOLE_OUTWARD = 4.0   # v3.3: shifts UsbClip's OWN 2 screw holes/bosses this far toward
+                           # the near (open, no-wall) edge, i.e. -Y, AWAY from the Shroud's
+                           # real fan-screw Y position (SCREW_DY). THIS IS A PARAMETER YOU
+                           # CAN EDIT DIRECTLY -- just this one number. But know what it
+                           # means first: UsbClip's holes no longer line up with the Shroud's
+                           # real screw holes once this is nonzero (0.0 restores exact
+                           # alignment) -- see the header's UNVERIFIED note before changing it.
+# =============================================================================
+
+assert HOLE_D <= 10.0
+SCREWS = [( SCREW_DX,  SCREW_DY), (-SCREW_DX,  SCREW_DY),
+          ( SCREW_DX, -SCREW_DY), (-SCREW_DX, -SCREW_DY)]
+# CLIP_SCREWS: UsbClip's OWN screw hole/boss centres. Deliberately NOT always identical to
+# the Shroud's real screw positions above -- see CLIP_HOLE_OUTWARD.
+CLIP_SCREWS = [(SCREW_DX, SCREW_DY - CLIP_HOLE_OUTWARD),
+               (-SCREW_DX, SCREW_DY - CLIP_HOLE_OUTWARD)]   # the "+Y pair" -- see header
+POST_KEEP = POST_D/2 + 2.0
+half = FAN_SIZE/2.0
+SQRT2 = math.sqrt(2.0)
+
+V = App.Vector
+Z = V(0, 0, 1)
+
+
+def grid_holes():
+    pts=[]; row_h=PITCH*math.sqrt(3)/2.0
+    nrow=int(GRID_AREA_R/row_h)+2; ncol=int(GRID_AREA_R/PITCH)+2
+    for r in range(-nrow,nrow+1):
+        y=r*row_h; xoff=(PITCH/2.0) if (r%2) else 0.0
+        for c in range(-ncol,ncol+1):
+            x=c*PITCH+xoff
+            if math.hypot(x,y)>GRID_AREA_R: continue
+            if any(math.hypot(x-sx,y-sy)<POST_KEEP+HOLE_D/2 for sx,sy in SCREWS): continue
+            pts.append((x,y))
+    return pts
+
+
+def new_sketch_in(body, xy, name, zoff=0.0):
+    sk = App.ActiveDocument.addObject("Sketcher::SketchObject", name)
+    body.addObject(sk)
+    if xy is not None:
+        sk.AttachmentSupport = [(xy, "")]
+        sk.MapMode = "FlatFace"
+        if zoff:
+            pl = App.Placement(); pl.Base = V(0, 0, zoff); sk.AttachmentOffset = pl
+    return sk
+
+
+def add_rounded_rect(sk,x0,y0,x1,y1,r):
+    i0=sk.GeometryCount
+    segs=[("line",V(x0+r,y0,0),V(x1-r,y0,0)),("arc",V(x1-r,y0+r,0),-math.pi/2,0.0),
+          ("line",V(x1,y0+r,0),V(x1,y1-r,0)),("arc",V(x1-r,y1-r,0),0.0,math.pi/2),
+          ("line",V(x1-r,y1,0),V(x0+r,y1,0)),("arc",V(x0+r,y1-r,0),math.pi/2,math.pi),
+          ("line",V(x0,y1-r,0),V(x0,y0+r,0)),("arc",V(x0+r,y0+r,0),math.pi,3*math.pi/2)]
+    for sg in segs:
+        if sg[0]=="line": sk.addGeometry(Part.LineSegment(sg[1],sg[2]),False)
+        else: _,c,a0,a1=sg; sk.addGeometry(Part.ArcOfCircle(Part.Circle(c,Z,r),a0,a1),False)
+    for k in range(8): sk.addConstraint(Sketcher.Constraint("Coincident",i0+k,2,i0+(k+1)%8,1))
+
+
+def add_rect(sk, x0, y0, x1, y1):
+    """Plain sharp-cornered rectangle -- add_rounded_rect(...,r=0) degenerates (zero-radius
+    arc isn't valid geometry)."""
+    i0 = sk.GeometryCount
+    pts = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    for k in range(4):
+        a, b = pts[k], pts[(k + 1) % 4]
+        sk.addGeometry(Part.LineSegment(V(a[0], a[1], 0), V(b[0], b[1], 0)), False)
+    for k in range(4):
+        sk.addConstraint(Sketcher.Constraint("Coincident", i0 + k, 2, i0 + (k + 1) % 4, 1))
+
+
+def add_circles(sk,pts,dia):
+    for (x,y) in pts: sk.addGeometry(Part.Circle(V(x,y,0),Z,dia/2.0),False)
+
+
+def add_ztie_slot(sk, cx, cy):
+    """One zip-tie slot: a generously-sized rectangular pocket profile, centred at
+    (cx, cy), long axis along X. Shared by the hub straps and the cable tab -- same slot
+    shape, just placed differently."""
+    add_rect(sk, cx - ZTIE_SLOT_LEN/2.0, cy - ZTIE_SLOT_WID/2.0,
+                 cx + ZTIE_SLOT_LEN/2.0, cy + ZTIE_SLOT_WID/2.0)
+
+
+def pad_in(body, sketch, length, name, reversed=False):
+    p = App.ActiveDocument.addObject("PartDesign::Pad", name)
+    p.Profile = sketch; p.Length = length; p.Reversed = reversed
+    body.addObject(p); App.ActiveDocument.recompute(); return p
+
+
+def pocket_in(body, sketch, length, name, reversed=True):
+    p = App.ActiveDocument.addObject("PartDesign::Pocket", name)
+    p.Profile = sketch; p.Reversed = reversed; p.Length = length
+    body.addObject(p); App.ActiveDocument.recompute(); return p
+
+
+def chamfer_edge_at(body, base_pad, name, y_target, z_target, size):
+    """Chamfer the single straight edge of base_pad's current shape that runs along X at a
+    known (y_target, z_target) -- found by exact position, not by 'touches the overall
+    bounding box' (the technique used for GripChamfer/PlatformChamfer): several straight
+    edges here share the same bbox extremes, so that heuristic can't tell them apart."""
+    tol = 0.05
+    names = []
+    for i, e in enumerate(base_pad.Shape.Edges):
+        bb = e.BoundBox
+        if bb.YLength < 1e-6 and bb.ZLength < 1e-6 and bb.XLength > 1.0:
+            if abs(bb.YMin - y_target) < tol and abs(bb.ZMin - z_target) < tol:
+                names.append("Edge%d" % (i + 1))
+    if not names:
+        App.Console.PrintWarning(
+            "chamfer_edge_at(%s): no matching edge at y=%.3f z=%.3f -- skipped\n"
+            % (name, y_target, z_target))
+        return base_pad
+    ch = App.ActiveDocument.addObject("PartDesign::Chamfer", name)
+    ch.Base = (base_pad, names)
+    ch.Size = size
+    body.addObject(ch)
+    App.ActiveDocument.recompute()
+    return ch
+
+
+doc = App.newDocument("NH_L9_Cover_v3")
+
+# =============================================================================
+# BODY 1: Shroud -- identical to nh-l9-cover-v2.FCMacro, unchanged
+# =============================================================================
+shroud = doc.addObject("PartDesign::Body", "Shroud")
+xy_s = None
+for f in shroud.Origin.OriginFeatures:
+    if "XY" in f.Label or "XY" in f.Name: xy_s = f; break
+
+def new_sketch(name, zoff=0.0):
+    return new_sketch_in(shroud, xy_s, name, zoff)
+
+def pad(sketch, length, name):
+    return pad_in(shroud, sketch, length, name, reversed=False)
+
+def pocket(sketch, length, name):
+    return pocket_in(shroud, sketch, length, name, reversed=True)
+
+# ---- posts ----
+posts=new_sketch("Sketch_Posts",zoff=0.0); add_circles(posts,SCREWS,POST_D)
+doc.recompute(); pad(posts,STANDOFF,"Posts")
+
+# ---- plate ----
+plate=new_sketch("Sketch_Plate",zoff=STANDOFF)
+add_rounded_rect(plate,-half,-half,half,half,FAN_CORNER)
+doc.recompute(); plate_pad=pad(plate,GRID_T,"GridPlate")
+
+# ---- chamfer the grip perimeter (top + bottom of the plate) ----
+try:
+    names=[]
+    for i,e in enumerate(plate_pad.Shape.Edges):
+        bb=e.BoundBox
+        if bb.ZLength<1e-6 and math.hypot(bb.XLength,bb.YLength)>20.0:
+            if abs(bb.ZMax-(STANDOFF+GRID_T))<1e-3 or abs(bb.ZMax-STANDOFF)<1e-3:
+                names.append("Edge%d"%(i+1))
+    if names:
+        ch=doc.addObject("PartDesign::Chamfer","GripChamfer")
+        ch.Base=(plate_pad,names); ch.Size=CHAMFER
+        shroud.addObject(ch); doc.recompute()
+except Exception as e:
+    App.Console.PrintWarning("Grip chamfer skipped (%s)\n"%str(e)[:60])
+
+# ---- corner cable hooks REMOVED 2026-07-21 (explicit request: "not needed anymore",
+#      superseded by UsbClip's single larger cable loop below) ----
+
+# ---- airflow holes ----
+gh=new_sketch("Sketch_GridHoles",zoff=STANDOFF); add_circles(gh,grid_holes(),HOLE_D)
+doc.recompute(); pocket(gh,GRID_T+0.2,"GridHoles")
+
+# ---- screw holes ----
+sc=new_sketch("Sketch_ScrewHoles",zoff=0.0); add_circles(sc,SCREWS,SCREW_D)
+doc.recompute(); shroud_screw_pocket = pocket(sc,STANDOFF+GRID_T+0.2,"ScrewHoles")
+
+shroud.Tip = shroud_screw_pocket
+doc.recompute()
+
+# =============================================================================
+# BODY 2: UsbClip -- v3.3 chunky snap-fit cradle, near rail removed, cable notches added,
+# screw holes shifted toward the open edge
+# (2026-07-21 riff, see header for the story)
+# =============================================================================
+clip = doc.addObject("PartDesign::Body", "UsbClip")
+xy_c = None
+for f in clip.Origin.OriginFeatures:
+    if "XY" in f.Label or "XY" in f.Name: xy_c = f; break
+
+def new_csk(name, zoff=0.0):
+    return new_sketch_in(clip, xy_c, name, zoff)
+
+# ---- geometry layout (same fan-centred global XY frame as the Shroud, so the 2 screw
+#      holes land exactly on 2 of the fan's real screws) ----
+hub_x0 = -HUB_L/2.0
+hub_x1 =  HUB_L/2.0
+hub_y0 =  SCREW_DY               # near (fan-side) edge of the hub footprint
+hub_y1 =  SCREW_DY + HUB_W       # far edge
+hub_cy = (hub_y0 + hub_y1) / 2.0 # hub's own Y-centreline -- where both short-end cables exit
+
+cav_x0 = hub_x0 - HUB_CLEAR_SIDE
+cav_x1 = hub_x1 + HUB_CLEAR_SIDE
+cav_y0 = hub_y0 - HUB_CLEAR_SIDE   # inner face of the near rail
+cav_y1 = hub_y1 + HUB_CLEAR_SIDE   # inner face of the far rail
+
+rail_out_y0 = cav_y0 - RAIL_T      # outer face of the near rail
+rail_out_y1 = cav_y1 + RAIL_T      # outer face of the far rail
+end_out_x0  = cav_x0 - END_WALL_T  # outer face of the near-end wall
+end_out_x1  = cav_x1 + END_WALL_T  # outer face of the far-end wall
+
+plat_x0 = end_out_x0 - PLATFORM_MARGIN
+plat_x1 = end_out_x1 + PLATFORM_MARGIN
+plat_y0 = rail_out_y0 - PLATFORM_MARGIN
+plat_y1 = rail_out_y1 + PLATFORM_MARGIN
+
+RAIL_TOP = PLATFORM_T + RAIL_H     # absolute Z of the cradle's rim
+
+# ---- base plate ----
+base_sk = new_csk("Sketch_Platform")
+add_rounded_rect(base_sk, plat_x0, plat_y0, plat_x1, plat_y1, 6.0)
+doc.recompute()
+clip_tip = pad_in(clip, base_sk, PLATFORM_T, "Platform")
+
+# ---- bold bevel on the platform's bottom outer perimeter -- purely a visual/industrial
+#      touch, same edge-detection technique as the Shroud's own GripChamfer (edges touching
+#      the overall bounding box, filtered by size to exclude small hole/corner edges) ----
+try:
+    names = []
+    for i, e in enumerate(clip_tip.Shape.Edges):
+        bb = e.BoundBox
+        if bb.ZLength < 1e-6 and math.hypot(bb.XLength, bb.YLength) > 20.0 and abs(bb.ZMax) < 1e-3:
+            names.append("Edge%d" % (i + 1))
+    if names:
+        base_ch = App.ActiveDocument.addObject("PartDesign::Chamfer", "PlatformChamfer")
+        base_ch.Base = (clip_tip, names); base_ch.Size = BASE_CHAMFER
+        clip.addObject(base_ch); doc.recompute()
+        clip_tip = base_ch
+except Exception as e:
+    App.Console.PrintWarning("Platform chamfer skipped (%s)\n" % str(e)[:60])
+
+# ---- 2 screw bosses, own sequential Pad (v3.0 lesson, see project memory: crossing
+#      profiles combined into ONE sketch produced an invalid solid -- `Shape.isValid()`
+#      came back False even though the status string said "Valid". Two same-Body Pads are
+#      genuine solid-level 3D booleans and don't have that restriction.)
+#      Centred on CLIP_SCREWS, NOT directly on SCREW_DX/SCREW_DY -- see CLIP_HOLE_OUTWARD in
+#      the parameters and the header's REAL UNRESOLVED CONCERN #1. ----
+bosses_sk = new_csk("Sketch_ScrewBosses")
+add_circles(bosses_sk, CLIP_SCREWS, BOSS_D)
+doc.recompute()
+clip_tip = pad_in(clip, bosses_sk, PLATFORM_T, "ScrewBosses")
+
+# ---- the 2 screw holes, through the bosses -- NOT guaranteed to be "shared" with the
+#      Shroud's real fan screws once CLIP_HOLE_OUTWARD != 0, see header ----
+csk_holes = new_csk("Sketch_ClipHoles", zoff=PLATFORM_T)
+add_circles(csk_holes, CLIP_SCREWS, SCREW_D)
+doc.recompute()
+clip_tip = pocket_in(clip, csk_holes, PLATFORM_T + 1.0, "ClipHoles", reversed=False)
+
+# ---- cradle side rail: FAR side only. The near rail (facing the fan, directly across from
+#      the cable tie tab on the far side) fully walled in the hub's near edge -- which
+#      turned out to physically block access to the hub's own USB ports -- so it's removed
+#      entirely per explicit request. This also means the old screw-access relief cut (which
+#      existed purely because the near rail/lip capped part of each screw hole) is gone too:
+#      nothing left there to relieve, the screw holes are naturally clear from above now. ----
+rails_sk = new_csk("Sketch_Rails", zoff=PLATFORM_T)
+add_rect(rails_sk, end_out_x0, cav_y1, end_out_x1, rail_out_y1)   # far rail only
+doc.recompute()
+clip_tip = pad_in(clip, rails_sk, RAIL_H, "Rails")
+
+# ---- cradle end walls: full rail-to-rail width (still spanning the near rail's old Y
+#      footprint too, even though that rail is gone -- keeps the end walls' own footprint
+#      unchanged so they still fully close off both short ends against lengthwise sliding) ----
+ends_sk = new_csk("Sketch_EndWalls", zoff=PLATFORM_T)
+add_rect(ends_sk, end_out_x0, rail_out_y0, cav_x0, rail_out_y1)   # near end
+add_rect(ends_sk, cav_x1, rail_out_y0, end_out_x1, rail_out_y1)   # far end
+doc.recompute()
+clip_tip = pad_in(clip, ends_sk, RAIL_H, "EndWalls")
+
+# ---- cable pass-through notches: both end walls get a CABLE_GAP_W-wide gap cut straight
+#      through their full height, centred on the hub's own Y-centreline -- the hub's 2 short
+#      ends each have a cable exiting dead-centre and this is the only place they can get out
+#      of the cradle. Cut through the FULL end-wall height since the cable's actual exit
+#      height wasn't given -- see UNVERIFIED note in header. ----
+notch_sk = new_csk("Sketch_CableNotches", zoff=RAIL_TOP)
+add_rect(notch_sk, end_out_x0, hub_cy - CABLE_GAP_W/2.0, cav_x0, hub_cy + CABLE_GAP_W/2.0)
+add_rect(notch_sk, cav_x1, hub_cy - CABLE_GAP_W/2.0, end_out_x1, hub_cy + CABLE_GAP_W/2.0)
+doc.recompute()
+clip_tip = pocket_in(clip, notch_sk, RAIL_H + 1.0, "CableNotches", reversed=False)
+
+# ---- snap lip: FAR side only now (see the Rails note above -- the near lip went with the
+#      near rail). THIS -- not zip ties -- is what holds the hub down on that edge: press it
+#      straight down past the lip's lead-in chamfer and it snaps in. The near edge is now
+#      open/unretained -- end walls still stop lengthwise sliding, but there's no longer
+#      anything resisting the hub lifting up on the near side. No other materials needed for
+#      the hub, per explicit request; single-sided retention is UNVERIFIED, see header. ----
+lips_sk = new_csk("Sketch_Lips", zoff=RAIL_TOP - LIP_T)
+add_rect(lips_sk, cav_x0, cav_y1 - LIP_DEPTH, cav_x1, cav_y1)      # over the far rail only
+doc.recompute()
+clip_tip = pad_in(clip, lips_sk, LIP_T, "Lips")
+
+# ---- lead-in chamfer on the lip's leading (innermost, bottom) edge -- see the header's
+#      UNVERIFIED note: this is the single biggest physical unknown in the design ----
+clip_tip = chamfer_edge_at(clip, clip_tip, "LipChamferFar",
+                            cav_y1 - LIP_DEPTH, RAIL_TOP - LIP_T, LIP_CHAMFER)
+
+# ---- cable zip-tie tab: a separate, chunky, FULL-HEIGHT block off the cradle's far rail,
+#      centred at X=0 -- i.e. in the MIDDLE of the holder's length, not off either end (the
+#      old v3.0 tab lived past the +X end; explicitly relocated per request). Own pair of
+#      slots so a tie loops over a cable bundle laid across it, same as before -- cables
+#      were never the objection, only the hub's own retention mechanism was. ----
+tab_cx = 0.0
+tab_x0 = tab_cx - CTAB_WIDTH/2.0
+tab_x1 = tab_cx + CTAB_WIDTH/2.0
+tab_y0 = rail_out_y1 - CTAB_OVERLAP
+tab_y1 = rail_out_y1 + CTAB_LEN
+
+ctab_sk = new_csk("Sketch_CableTab")
+add_rounded_rect(ctab_sk, tab_x0, tab_y0, tab_x1, tab_y1, 4.0)
+doc.recompute()
+clip_tip = pad_in(clip, ctab_sk, RAIL_TOP, "CableTab")
+
+slot1_cy = rail_out_y1 + (CTAB_LEN - CTAB_SLOT_GAP)/2.0
+slot2_cy = slot1_cy + CTAB_SLOT_GAP
+cslot_sk = new_csk("Sketch_CableSlots", zoff=RAIL_TOP)
+add_ztie_slot(cslot_sk, tab_cx, slot1_cy)
+add_ztie_slot(cslot_sk, tab_cx, slot2_cy)
+doc.recompute()
+clip_tip = pocket_in(clip, cslot_sk, RAIL_TOP + 1.0, "CableSlots", reversed=False)
+
+clip.Tip = clip_tip
+doc.recompute()
+
+try:
+    import FreeCADGui as Gui
+    Gui.activeDocument().activeView().viewIsometric(); Gui.SendMsgToActiveView("ViewFit")
+except Exception: pass
+
+App.Console.PrintMessage(
+    "\nv3.3 built: Shroud unchanged from v2. New UsbClip: %.1fx%.1fx%.1fmm chunky snap-fit "
+    "cradle, FAR-side rail+lip only (%.1fmm thick x %.1fmm tall, %.1fmm lip overhang) for a "
+    "%.1fx%.1fx%.1fmm hub -- near rail removed for USB port access, no zip ties on the hub "
+    "itself. 2x %.1fmm dia screw bosses, shifted %.1fmm from the Shroud's real fan-screw Y "
+    "toward the open near edge (CLIP_HOLE_OUTWARD). Both end walls have a %.1fmm cable "
+    "pass-through notch on the hub's centreline. Cable zip-tie tab centred at X=0, "
+    "%.1fx%.1fmm footprint.\n"
+    "UNVERIFIED / UNRESOLVED: (1) UsbClip's screw holes no longer align with the Shroud's "
+    "real fan-screw holes by %.1fmm -- how UsbClip actually attaches now is not resolved "
+    "here. (2) whether single-sided (far-lip-only) retention is enough to keep the hub "
+    "seated. (3) whether the lip's lead-in chamfer lets the rail flex enough by hand. (4) "
+    "as always, whether the screws are long enough for the clip's %.1fmm added on top of the "
+    "grille's own %.1fmm stack. Check all of this before assembling.\n"
+    % (plat_x1-plat_x0, plat_y1-plat_y0, RAIL_TOP,
+       RAIL_T, RAIL_H, LIP_DEPTH,
+       HUB_L, HUB_W, HUB_H, BOSS_D, CLIP_HOLE_OUTWARD,
+       CABLE_GAP_W,
+       tab_x1-tab_x0, tab_y1-tab_y0,
+       CLIP_HOLE_OUTWARD,
+       RAIL_TOP, STANDOFF+GRID_T))
